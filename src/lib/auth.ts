@@ -1,71 +1,68 @@
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
-import { UserRole } from '@/types';
+import NextAuth from "next-auth";
+import Credentials from "next-auth/providers/credentials";
+import bcrypt from "bcryptjs";
+import connectDB from "@/lib/db";
+import { User } from "@/models/User";
+import { authConfig } from "@/lib/auth.config";
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
-const JWT_EXPIRES_IN = '7d';
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
+  providers: [
+    Credentials({
+      name: "credentials",
+      credentials: {
+        userId: { label: "User ID", type: "text" },
+        password: { label: "Password", type: "password" },
+        role: { label: "Role", type: "text" },
+      },
+      async authorize(credentials) {
+      console.log('[auth] authorize called', { userId: credentials?.userId, role: credentials?.role });
+      if (!credentials?.userId || !credentials?.password || !credentials?.role) {
+        console.log('[auth] missing credentials');
+        return null;
+      }
 
-export interface TokenPayload {
-  userId: string;
-  role: UserRole;
-  departmentId?: string;
-}
+      try {
+        console.log('[auth] connecting to DB');
+        await connectDB();
+        console.log('[auth] connected to DB');
+      } catch (e) {
+        console.error('[auth] DB connection error', e);
+        return null;
+      }
 
-// JWT Token utilities
-export class AuthTokenService {
-  static generateToken(payload: TokenPayload): string {
-    return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
-  }
+      const user = await User.findOne({
+        userId: credentials.userId,
+        role: credentials.role,
+        isActive: true,
+      }).lean();
 
-  static verifyToken(token: string): TokenPayload | null {
-    try {
-      return jwt.verify(token, JWT_SECRET) as TokenPayload;
-    } catch (error) {
-      return null;
-    }
-  }
+      if (!user) {
+        console.log('[auth] user not found', { userId: credentials.userId, role: credentials.role });
+        return null;
+      }
 
-  static decodeToken(token: string): TokenPayload | null {
-    try {
-      return jwt.decode(token) as TokenPayload;
-    } catch (error) {
-      return null;
-    }
-  }
-}
+      console.log('[auth] user found, verifying password for', user.userId);
+      const isValid = await bcrypt.compare(credentials.password as string, user.password);
 
-// Password utilities
-export class PasswordService {
-  static async hashPassword(password: string): Promise<string> {
-    const salt = await bcrypt.genSalt(10);
-    return bcrypt.hash(password, salt);
-  }
+      if (!isValid) {
+        console.log('[auth] invalid password for', credentials.userId);
+        return null;
+      }
 
-  static async comparePassword(password: string, hash: string): Promise<boolean> {
-    return bcrypt.compare(password, hash);
-  }
-}
+      console.log('[auth] authentication successful for', user.userId);
 
-// Authorization helpers
-export class AuthorizationService {
-  static hasRole(userRole: UserRole, allowedRoles: UserRole[]): boolean {
-    return allowedRoles.includes(userRole);
-  }
-
-  static isAdmin(userRole: UserRole): boolean {
-    return userRole === 'admin';
-  }
-
-  static isTeacher(userRole: UserRole): boolean {
-    return userRole === 'teacher';
-  }
-
-  static isStudent(userRole: UserRole): boolean {
-    return userRole === 'student';
-  }
-
-  static canAccessDepartment(userDepartmentId: string | undefined, targetDepartmentId: string): boolean {
-    if (!userDepartmentId) return false;
-    return userDepartmentId === targetDepartmentId;
-  }
-}
+      return {
+          id: user._id.toString(),
+          userId: user.userId,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          departmentId: user.departmentId?.toString(),
+          currentSemester: user.currentSemester,
+          profileImage: user.profileImage,
+        };
+      },
+    }),
+  ],
+});
