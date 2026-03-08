@@ -1,37 +1,77 @@
-import mongoose, { Schema } from 'mongoose';
-import { IRegistration } from '@/types';
+import mongoose, { Schema, Document, models, model } from "mongoose";
 
-const RegistrationSchema = new Schema<IRegistration>({
-  studentId: { type: String, required: true, index: true },
-  semester: { 
-    type: String, 
-    enum: ['1-1', '1-2', '2-1', '2-2', '3-1', '3-2', '4-1', '4-2'],
-    required: true 
+export interface RegistrationDocument extends Document {
+  studentId: mongoose.Types.ObjectId;
+  semesterLabel: string;
+  academicYear: string;
+  departmentId: mongoose.Types.ObjectId;
+  courseOfferingIds: mongoose.Types.ObjectId[];
+  status:
+    | "draft"
+    | "pending_advisor"
+    | "pending_head"
+    | "approved"
+    | "payment_pending"
+    | "paid"
+    | "admitted"
+    | "rejected";
+  advisorId?: mongoose.Types.ObjectId;
+  advisorApprovedAt?: Date;
+  headId?: mongoose.Types.ObjectId;
+  headApprovedAt?: Date;
+  paymentCompletedAt?: Date;
+  adminAdmittedAt?: Date;
+  adminAdmittedBy?: mongoose.Types.ObjectId;
+  rejectionReason?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const RegistrationSchema = new Schema<RegistrationDocument>(
+  {
+    studentId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
+    semesterLabel: { type: String, required: true },
+    academicYear: { type: String, required: true },
+    departmentId: { type: Schema.Types.ObjectId, ref: "Department", required: true },
+    courseOfferingIds: [{ type: Schema.Types.ObjectId, ref: "CourseSection" }],
+    status: {
+      type: String,
+      enum: [
+        "draft",
+        "pending_advisor",
+        "pending_head",
+        "approved",
+        "payment_pending",
+        "paid",
+        "admitted",
+        "rejected",
+      ],
+      default: "draft",
+      index: true,
+    },
+    advisorId: { type: Schema.Types.ObjectId, ref: "User" },
+    advisorApprovedAt: { type: Date },
+    headId: { type: Schema.Types.ObjectId, ref: "User" },
+    headApprovedAt: { type: Date },
+    paymentCompletedAt: { type: Date },
+    adminAdmittedAt: { type: Date },
+    adminAdmittedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    rejectionReason: { type: String },
   },
-  departmentId: { type: String, required: true, index: true },
-  courseIds: [{ type: String, required: true }],
-  state: { 
-    type: String, 
-    enum: [
-      'draft', 'submitted', 'advisor_approved', 'advisor_rejected',
-      'head_approved', 'head_rejected', 'payment_pending', 
-      'payment_completed', 'admitted', 'cancelled'
-    ],
-    required: true,
-    default: 'draft',
-    index: true
-  },
-  advisorId: { type: String },
-  advisorApprovedAt: { type: Date },
-  advisorRejectionReason: { type: String },
-  headApprovedAt: { type: Date },
-  headRejectionReason: { type: String },
-  paymentId: { type: String },
-  paidAt: { type: Date },
-  admittedAt: { type: Date },
-}, { timestamps: true });
+  { timestamps: true }
+);
 
-RegistrationSchema.index({ studentId: 1, semester: 1 });
-RegistrationSchema.index({ state: 1, departmentId: 1 });
+// A student can only have one registration per semester per year
+RegistrationSchema.index(
+  { studentId: 1, semesterLabel: 1, academicYear: 1 },
+  { unique: true }
+);
 
-export const Registration = mongoose.models.Registration || mongoose.model<IRegistration>('Registration', RegistrationSchema);
+export const Registration =
+  models.Registration ||
+  model<RegistrationDocument>("Registration", RegistrationSchema);
