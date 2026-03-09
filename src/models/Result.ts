@@ -1,30 +1,69 @@
-import mongoose, { Schema } from 'mongoose';
-import { IResult } from '@/types';
+import mongoose, { Schema, Document, models, model } from "mongoose";
 
-const ResultSchema = new Schema<IResult>({
-  studentId: { type: String, required: true, index: true },
-  departmentId: { type: String, required: true, index: true },
-  semester: { 
-    type: String, 
-    enum: ['1-1', '1-2', '2-1', '2-2', '3-1', '3-2', '4-1', '4-2'],
-    required: true 
+const CourseResultSchema = new Schema(
+  {
+    courseOfferingId: { type: Schema.Types.ObjectId, ref: "CourseSection" },
+    courseCode: { type: String, required: true },
+    courseTitle: { type: String, required: true },
+    credits: { type: Number, required: true },
+    gradePoint: { type: Number, required: true, min: 0, max: 4 },
+    gradeLetter: { type: String, required: true },
+    marks: { type: Number, required: true, min: 0, max: 100 },
   },
-  academicYear: { type: String, required: true },
-  courseResults: [{
-    courseId: { type: String, required: true },
-    marksObtained: { type: Number, required: true },
-    totalMarks: { type: Number, required: true },
-    gradePoint: { type: Number, required: true },
-    letterGrade: { type: String, required: true },
-  }],
-  semesterGPA: { type: Number, required: true },
-  cumulativeCGPA: { type: Number, required: true },
-  departmentRank: { type: Number },
-  publishedAt: { type: Date, default: Date.now },
-  publishedBy: { type: String, required: true },
-}, { timestamps: true });
+  { _id: false }
+);
 
-ResultSchema.index({ studentId: 1, semester: 1, academicYear: 1 }, { unique: true });
-ResultSchema.index({ departmentId: 1, semester: 1, academicYear: 1 });
+export interface ResultDocument extends Document {
+  studentId: mongoose.Types.ObjectId;
+  departmentId: mongoose.Types.ObjectId;
+  semesterLabel: string;
+  academicYear: string;
+  courses: {
+    courseOfferingId: mongoose.Types.ObjectId;
+    courseCode: string;
+    courseTitle: string;
+    credits: number;
+    gradePoint: number;
+    gradeLetter: string;
+    marks: number;
+  }[];
+  semesterGPA: number;
+  cgpa: number;
+  departmentRank?: number;
+  isPublished: boolean;
+  publishedBy?: mongoose.Types.ObjectId;
+  publishedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
-export const Result = mongoose.models.Result || mongoose.model<IResult>('Result', ResultSchema);
+const ResultSchema = new Schema<ResultDocument>(
+  {
+    studentId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
+    departmentId: {
+      type: Schema.Types.ObjectId,
+      ref: "Department",
+      required: true,
+      index: true,
+    },
+    semesterLabel: { type: String, required: true, index: true },
+    academicYear: { type: String, required: true },
+    courses: [CourseResultSchema],
+    semesterGPA: { type: Number, required: true, min: 0, max: 4 },
+    cgpa: { type: Number, required: true, min: 0, max: 4 },
+    departmentRank: { type: Number },
+    isPublished: { type: Boolean, default: false, index: true },
+    publishedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    publishedAt: { type: Date },
+  },
+  { timestamps: true }
+);
+
+ResultSchema.index({ studentId: 1, semesterLabel: 1, academicYear: 1 }, { unique: true });
+
+export const Result = models.Result || model<ResultDocument>("Result", ResultSchema);
