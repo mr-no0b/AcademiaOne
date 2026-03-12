@@ -1,115 +1,166 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
+import React, { useState } from "react";
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { GraduationCap, Student, ChalkboardTeacher, ShieldCheck, ArrowRight, Eye, EyeSlash } from "@phosphor-icons/react";
+import { cn } from "@/lib/cn";
+
+type Role = "student" | "teacher" | "admin";
+
+const roles: { id: Role; label: string; icon: React.ReactNode; placeholder: string }[] = [
+  { id: "student", label: "Student", icon: <Student size={28} />, placeholder: "Enter your student ID" },
+  { id: "teacher", label: "Teacher", icon: <ChalkboardTeacher size={28} />, placeholder: "Enter your teacher ID" },
+  { id: "admin", label: "Admin", icon: <ShieldCheck size={28} />, placeholder: "Enter your admin ID" },
+];
 
 export default function LoginPage() {
-  const [userId, setUserId] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
   const router = useRouter();
+  const [selectedRole, setSelectedRole] = useState<Role>("student");
+  const [userId, setUserId] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleRoleSelect = (role: Role) => {
+    setSelectedRole(role);
+    setError("");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setIsLoading(true);
-
+    setError("");
+    setLoading(true);
     try {
-      await login(userId, password);
-      // Redirect based on role will be handled by the dashboard
-      router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.message || 'Invalid credentials');
+      const res = await signIn("credentials", {
+        userId: userId.trim(),
+        password,
+        role: selectedRole,
+        redirect: false,
+      });
+      if (res?.error) {
+        setError("Invalid credentials. Please check your ID and password.");
+      } else {
+        router.push(`/${selectedRole}`);
+        router.refresh();
+      }
+    } catch {
+      setError("Something went wrong. Please try again.");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4">
-      <div className="max-w-md w-full space-y-8">
-        {/* Header */}
-        <div className="text-center">
-          <h1 className="text-4xl font-bold text-indigo-900 mb-2">
-            AcademiaOne
-          </h1>
-          <p className="text-gray-600">University Management System</p>
+    <div
+      className="min-h-screen flex items-center justify-center p-4"
+      style={{
+        background: "radial-gradient(circle at top right, #e0e7ff 0%, #f8fafc 40%)",
+      }}
+    >
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-modal border border-slate-200 p-8">
+        {/* Logo */}
+        <div className="text-center mb-7">
+          <div className="inline-flex items-center justify-center w-14 h-14 bg-indigo-600 text-white rounded-2xl mb-3 shadow-lg">
+            <GraduationCap size={30} weight="bold" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-800">AcademiaOne</h1>
+          <p className="text-slate-500 text-sm mt-1">Sign in to your portal</p>
         </div>
 
-        {/* Login Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
-            Sign In
-          </h2>
+        {/* Role Selector */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-slate-700 mb-2">Select Role</label>
+          <div className="grid grid-cols-3 gap-3">
+            {roles.map((role) => (
+              <button
+                key={role.id}
+                type="button"
+                onClick={() => handleRoleSelect(role.id)}
+                className={cn(
+                  "flex flex-col items-center py-3 px-2 rounded-xl border-2 transition-all text-sm font-semibold gap-1.5 cursor-pointer",
+                  selectedRole === role.id
+                    ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                    : "border-slate-200 bg-white text-slate-500 hover:border-indigo-300 hover:bg-indigo-50/50"
+                )}
+              >
+                <span className={selectedRole === role.id ? "text-indigo-600" : "text-slate-400"}>
+                  {role.icon}
+                </span>
+                {role.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              University ID
+            </label>
+            <input
+              type="text"
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
+              placeholder={roles.find((r) => r.id === selectedRole)!.placeholder}
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all"
+              autoComplete="off"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Password
+            </label>
+            <div className="relative">
+              <input
+                type={showPass ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter password"
+                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all pr-10"
+                autoComplete="off"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPass(!showPass)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                {showPass ? <EyeSlash size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
 
           {error && (
-            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label htmlFor="userId" className="block text-sm font-medium text-gray-700 mb-2">
-                User ID
-              </label>
-              <input
-                id="userId"
-                type="text"
-                required
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900 placeholder-gray-500"
-                placeholder="e.g., STU-001"
-              />
-            </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 active:scale-[0.99] transition-all disabled:opacity-70 disabled:cursor-not-allowed shadow-sm mt-2"
+          >
+            {loading ? (
+              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+            ) : (
+              <>
+                Sign In <ArrowRight size={18} />
+              </>
+            )}
+          </button>
+        </form>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-gray-900 placeholder-gray-500"
-                placeholder="Enter your password"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? 'Signing in...' : 'Sign In'}
-            </button>
-          </form>
-        </div>
-
-        {/* Test Credentials */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="font-semibold text-gray-900 mb-3">Test Credentials:</h3>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-700 font-medium">Admin:</span>
-              <span className="font-mono text-gray-900 font-semibold">ADMIN-001 / admin123</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-700 font-medium">Teacher:</span>
-              <span className="font-mono text-gray-900 font-semibold">TEACHER-001 / teacher123</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-700 font-medium">Student:</span>
-              <span className="font-mono text-gray-900 font-semibold">STU-001 / student123</span>
-            </div>
-          </div>
-        </div>
+        <p className="text-center text-xs text-slate-400 mt-6">
+          Locked system — contact IT Department for access
+        </p>
       </div>
     </div>
   );
