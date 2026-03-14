@@ -1,49 +1,48 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { connectMongo } from '@/lib/mongodb';
-import { Department } from '@/models/Department';
-import { User } from '@/models/User';
-import { AuthTokenService } from '@/lib/auth';
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import connectDB from "@/lib/db";
+import { Department } from "@/models/Department";
+import { User } from "@/models/User";
 
-export async function GET(request: NextRequest) {
-  try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+export async function GET() {
+  await connectDB();
+  const depts = await Department.find()
+    .populate("headId", "name userId")
+    .lean();
 
-    const token = authHeader.substring(7);
-    const user = AuthTokenService.verifyToken(token);
+  const teacherAdvisors = await User.find({ role: "teacher", isActive: true, departmentId: { $ne: null } })
+    .select("name userId departmentId")
+    .lean();
 
-    if (!user) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    await connectMongo();
-
-    const departments = await Department.find()
-      .sort({ code: 1 })
-      .lean();
-
-    // Populate head information
-    const departmentsWithHeads = await Promise.all(
-      departments.map(async (dept: any) => {
-        if (dept.headId) {
-          const head = await User.findOne({ userId: dept.headId }).select('firstName lastName email').lean();
-          return { ...dept, head };
-        }
-        return dept;
-      })
-    );
-
-    return NextResponse.json({
-      success: true,
-      departments: departmentsWithHeads,
+  const advisorsByDept = new Map<string, Array<{ _id: string; name: string; userId: string }>>();
+  for (const teacher of teacherAdvisors) {
+    const deptId = teacher.departmentId?.toString();
+    if (!deptId) continue;
+    if (!advisorsByDept.has(deptId)) advisorsByDept.set(deptId, []);
+    advisorsByDept.get(deptId)!.push({
+      _id: teacher._id.toString(),
+      name: teacher.name,
+      userId: teacher.userId,
     });
-  } catch (error: any) {
-    console.error('Error fetching departments:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to fetch departments' },
-      { status: 500 }
-    );
   }
+
+  const enriched = depts.map((dept) => ({
+    ...dept,
+    advisorIds: (advisorsByDept.get(dept._id.toString()) ?? []).sort((left, right) =>
+      left.userId.localeCompare(right.userId, undefined, { numeric: true })
+    ),
+  }));
+
+  return NextResponse.json({ success: true, data: enriched });
+}
+
+export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session || session.user.role !== "admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  await connectDB();
+  const body = await req.json();
+  const dept = await Department.create(body);
+  return NextResponse.json({ success: true, data: dept }, { status: 201 });
 }
