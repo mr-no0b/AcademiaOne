@@ -1,62 +1,56 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { connectMongo } from '@/lib/mongodb';
-import { Course } from '@/models/Course';
-import { Department } from '@/models/Department';
-import { User } from '@/models/User';
-import { AuthTokenService } from '@/lib/auth';
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import connectDB from "@/lib/db";
+import { Course } from "@/models/Course";
+import { CourseSection } from "@/models/CourseSection";
 
-export async function GET(request: NextRequest) {
-  try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+export async function GET(req: NextRequest) {
+  await connectDB();
+  const url = new URL(req.url);
+  const dept = url.searchParams.get("dept");
+  const sem = url.searchParams.get("semester");
+  const query: Record<string, unknown> = {};
+  if (dept) query.departmentId = dept;
+  if (sem) query.semesterLabel = sem;
+  const courses = await Course.find(query).populate("departmentId", "name code").populate("teacherId", "name userId").lean();
+  return NextResponse.json({ success: true, data: courses });
+}
 
-    const token = authHeader.substring(7);
-    const user = AuthTokenService.verifyToken(token);
-
-    if (!user) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    await connectMongo();
-
-    const { searchParams } = new URL(request.url);
-    const departmentId = searchParams.get('departmentId');
-
-    const query: any = {};
-    if (departmentId) {
-      query.departmentId = departmentId;
-    }
-
-    const courses = await Course.find(query)
-      .sort({ code: 1 })
-      .lean();
-
-    // Populate department and teacher information
-    const coursesWithDetails = await Promise.all(
-      courses.map(async (course: any) => {
-        const department = await Department.findById(course.departmentId).select('name code').lean();
-        const teacher = course.teacherId 
-          ? await User.findOne({ userId: course.teacherId }).select('firstName lastName email').lean()
-          : null;
-        return { 
-          ...course, 
-          department,
-          teacher
-        };
-      })
-    );
-
-    return NextResponse.json({
-      success: true,
-      courses: coursesWithDetails,
-    });
-  } catch (error: any) {
-    console.error('Error fetching courses:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to fetch courses' },
-      { status: 500 }
-    );
+export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session || session.user.role !== "admin") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  await connectDB();
+  const body = await req.json();
+
+  let course;
+  try {
+    course = await Course.create(body);
+  } catch (err: unknown) {
+    if ((err as { code?: number })?.code === 11000) {
+      return NextResponse.json(
+        { error: `A course with code "${body.code}" already exists in this department.` },
+        { status: 409 }
+      );
+    }
+    throw err;
+  }
+
+  // Auto-create a default section so students can register immediately.
+  // teacherId is left unset (TBA) — assign a teacher later via scheduling.
+  const currentYear = new Date().getFullYear();
+  const academicYear = `${currentYear}-${currentYear + 1}`;
+  await CourseSection.create({
+    courseId: course._id,
+    departmentId: course.departmentId,
+    semesterLabel: course.semesterLabel,
+    academicYear,
+    section: "A",
+    isActive: true,
+  }).catch(() => {
+    // Silently ignore duplicate if section already exists
+  });
+
+  return NextResponse.json({ success: true, data: course }, { status: 201 });
 }
