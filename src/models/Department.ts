@@ -1,10 +1,22 @@
-import mongoose, { Schema } from 'mongoose';
-import { IDepartment } from '@/types';
+import mongoose, { Schema, Document, models, model } from "mongoose";
 
-const DepartmentSchema = new Schema<IDepartment>({
-  name: { type: String, required: true },
-  code: { type: String, required: true, unique: true, index: true },
-  headId: { type: String, index: true },
-}, { timestamps: true });
+export interface DepartmentDocument extends Document {
+  name: string;
+  code: string;
+  headId?: mongoose.Types.ObjectId;
+  advisorIds: mongoose.Types.ObjectId[];
+  createdAt: Date;
+}
 
-export const Department = mongoose.models.Department || mongoose.model<IDepartment>('Department', DepartmentSchema);
+const DepartmentSchema = new Schema<DepartmentDocument>(
+  {
+    name: { type: String, required: true },
+    code: { type: String, required: true, unique: true, uppercase: true },
+    headId: { type: Schema.Types.ObjectId, ref: "User" },
+    advisorIds: [{ type: Schema.Types.ObjectId, ref: "User" }],
+  },
+  { timestamps: true }
+);
+
+export const Department =
+  models.Department || model<DepartmentDocument>("Department", DepartmentSchema);

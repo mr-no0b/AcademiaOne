@@ -1,21 +1,11 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/contexts/AuthContext";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import { SessionProvider } from "next-auth/react";
 
 export const metadata: Metadata = {
-  title: "AcademiaOne - University Management System",
-  description: "Complete university management system with course registration, attendance, results, and more",
+  title: "AcademiaOne | University Portal",
+  description: "Centralized university management system",
+  icons: { icon: "/favicon.ico" },
 };
 
 export default function RootLayout({
@@ -25,13 +15,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+      <body className="antialiased">
+        <SessionProvider>{children}</SessionProvider>
       </body>
     </html>
   );
 }
+
