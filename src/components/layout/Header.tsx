@@ -97,7 +97,7 @@ export default function Header({ title, breadcrumb, onMenuClick }: HeaderProps) 
 
   return (
     <header
-      className="glass-panel flex flex-shrink-0 items-center justify-between border-x-0 border-t-0 px-4 sm:px-6"
+      className="glass-panel relative z-[90] flex flex-shrink-0 items-center justify-between border-x-0 border-t-0 px-4 sm:px-6"
       style={{ height: "var(--header-height)" }}
     >
       {/* Left */}
@@ -133,7 +133,7 @@ export default function Header({ title, breadcrumb, onMenuClick }: HeaderProps) 
           </button>
 
           {open && (
-            <div className="absolute right-0 top-12 z-50 w-[calc(100vw-2rem)] max-w-96 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-modal sm:w-96">
+            <div className="absolute right-0 top-full z-[120] mt-3 w-[calc(100vw-2rem)] max-w-96 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-modal sm:w-96">
               {/* Header */}
               <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/85 px-4 py-3">
                 <span className="text-sm font-bold text-slate-800">Notifications</span>
