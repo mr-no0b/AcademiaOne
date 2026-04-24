@@ -104,7 +104,10 @@ export async function finalizeStripeRegistrationPayment({
   }));
   await Enrollment.insertMany(payEnrollments, { ordered: false }).catch(() => {});
 
-  await User.findByIdAndUpdate(reg.studentId, { currentSemester: reg.semesterLabel });
+  await User.findByIdAndUpdate(reg.studentId, {
+    currentSemester: reg.semesterLabel,
+    session: reg.academicYear,
+  });
 
   if (!wasAlreadyAdmitted) {
     const studentPay = await User.findById(reg.studentId).lean();

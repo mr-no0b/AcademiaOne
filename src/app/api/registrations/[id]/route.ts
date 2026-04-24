@@ -120,8 +120,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }));
     await Enrollment.insertMany(admitEnrollments, { ordered: false }).catch(() => {});
 
-    // Update student's current semester
-    await User.findByIdAndUpdate(reg.studentId, { currentSemester: reg.semesterLabel });
+    // Keep the student profile in sync with the admitted registration.
+    await User.findByIdAndUpdate(reg.studentId, {
+      currentSemester: reg.semesterLabel,
+      session: reg.academicYear,
+    });
 
     return NextResponse.json({ success: true, data: reg });
   }

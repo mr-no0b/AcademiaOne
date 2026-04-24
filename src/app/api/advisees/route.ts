@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import connectDB from "@/lib/db";
 import { User } from "@/models/User";
 import { Result } from "@/models/Result";
+import { Registration } from "@/models/Registration";
 import mongoose from "mongoose";
 
 export async function GET(req: NextRequest) {
@@ -30,7 +31,6 @@ export async function GET(req: NextRequest) {
     role: "student",
     isActive: true,
   };
-  if (intakeSession) query.session = intakeSession;
   if (semester) query.currentSemester = semester;
 
   const advisees = await User.find(query)
@@ -40,6 +40,22 @@ export async function GET(req: NextRequest) {
     .lean();
 
   const studentIds = advisees.map((s) => (s as { _id: mongoose.Types.ObjectId })._id);
+
+  const latestRegistrations = await Registration.find({
+    studentId: { $in: studentIds },
+    status: { $ne: "rejected" },
+  })
+    .select("studentId academicYear createdAt")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const registrationSessionMap = new Map<string, string>();
+  for (const registration of latestRegistrations) {
+    const studentId = registration.studentId.toString();
+    if (!registrationSessionMap.has(studentId)) {
+      registrationSessionMap.set(studentId, registration.academicYear);
+    }
+  }
 
   // Get latest published CGPA per student via aggregation
   const latestResults = await Result.aggregate([
@@ -56,15 +72,20 @@ export async function GET(req: NextRequest) {
   );
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data = advisees.map((s: any) => ({
-    _id: s._id.toString(),
-    name: s.name as string,
-    userId: s.userId as string,
-    session: (s.session as string) ?? "—",
-    currentSemester: (s.currentSemester as string) ?? "—",
-    department: (s.departmentId as { name: string } | null)?.name ?? "—",
-    cgpa: cgpaMap.get(s._id.toString()) ?? null,
-  }));
+  const data = advisees
+    .map((s: any) => {
+      const studentId = s._id.toString();
+      return {
+        _id: studentId,
+        name: s.name as string,
+        userId: s.userId as string,
+        session: (s.session as string) || registrationSessionMap.get(studentId) || "—",
+        currentSemester: (s.currentSemester as string) ?? "—",
+        department: (s.departmentId as { name: string } | null)?.name ?? "—",
+        cgpa: cgpaMap.get(studentId) ?? null,
+      };
+    })
+    .filter((s) => !intakeSession || s.session === intakeSession);
 
   return NextResponse.json({ success: true, data, total: data.length });
 }
