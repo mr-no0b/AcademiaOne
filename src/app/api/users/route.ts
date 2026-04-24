@@ -4,6 +4,7 @@ import connectDB from "@/lib/db";
 import { User } from "@/models/User";
 import { Department } from "@/models/Department";
 import bcrypt from "bcryptjs";
+import { randomInt } from "crypto";
 
 type CsvRole = "student" | "teacher";
 type CredentialRow = {
@@ -76,7 +77,7 @@ function generateRandomPassword(length = 10) {
   const charset = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
   let password = "";
   for (let i = 0; i < length; i += 1) {
-    password += charset[Math.floor(Math.random() * charset.length)];
+    password += charset[randomInt(charset.length)];
   }
   return password;
 }
@@ -381,6 +382,79 @@ export async function POST(req: NextRequest) {
   }
 
   const { userId, name, email, password, role, departmentId, advisorId, currentSemester, session: userSession, profileImage } = body;
+
+  if (role === "student" || role === "teacher") {
+    if (!name || !email || !role) {
+      return NextResponse.json({ error: "Name, email and role are required" }, { status: 400 });
+    }
+
+    if (!departmentId || departmentId === "none") {
+      return NextResponse.json(
+        { error: role === "student" ? "Please select a department for this student." : "Please select a department for this teacher." },
+        { status: 400 }
+      );
+    }
+
+    const department = await Department.findById(departmentId).select("name code").lean();
+    if (!department) {
+      return NextResponse.json({ error: "Selected department not found." }, { status: 404 });
+    }
+
+    if (role === "student") {
+      if (!advisorId) {
+        return NextResponse.json({ error: "Please assign an advisor for this student." }, { status: 400 });
+      }
+
+      const advisor = await User.findOne({
+        _id: advisorId,
+        role: "teacher",
+        departmentId,
+        isActive: true,
+      })
+        .select("_id")
+        .lean();
+
+      if (!advisor) {
+        return NextResponse.json({ error: "Selected advisor does not match this department." }, { status: 400 });
+      }
+    }
+
+    const existingEmail = await User.findOne({ email });
+    if (existingEmail) {
+      return NextResponse.json({ error: "Email already in use" }, { status: 409 });
+    }
+
+    const generatedUserId = `${role === "student" ? "S" : "T"}${await getNextSerial(role === "student" ? "S" : "T")}`;
+    const plainPassword = generateRandomPassword();
+    const hashed = await bcrypt.hash(plainPassword, 12);
+
+    try {
+      const user = await User.create({
+        userId: generatedUserId,
+        name,
+        email,
+        password: hashed,
+        role,
+        departmentId,
+        advisorId: role === "student" ? advisorId : undefined,
+        profileImage: profileImage || undefined,
+        isActive: true,
+      });
+      const { password: _, ...userData } = user.toObject();
+      return NextResponse.json(
+        { success: true, data: userData, temporaryPassword: plainPassword },
+        { status: 201, headers: { "Cache-Control": "no-store" } }
+      );
+    } catch (err: unknown) {
+      const code = (err as { code?: number })?.code;
+      if (code === 11000) {
+        const keyValue = (err as { keyValue?: Record<string, unknown> })?.keyValue ?? {};
+        const field = Object.keys(keyValue)[0] ?? "field";
+        return NextResponse.json({ error: `Duplicate value for ${field}` }, { status: 409 });
+      }
+      throw err;
+    }
+  }
 
   if (!userId || !name || !password || !role) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });

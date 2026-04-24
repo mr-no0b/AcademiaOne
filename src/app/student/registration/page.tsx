@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge, statusVariant } from "@/components/ui/Badge";
 import { Spinner } from "@/components/ui/Spinner";
 import { useToast } from "@/components/ui/Toast";
-import { CheckCircle, PlusCircle, BookOpen, CalendarBlank, LockOpen } from "@phosphor-icons/react";
+import { CheckCircle, PlusCircle, BookOpen, CalendarBlank, LockOpen, DownloadSimple, Receipt, X } from "@phosphor-icons/react";
 import { SEMESTERS } from "@/types";
 
 type Offering = {
@@ -28,6 +28,7 @@ type GroupedOffering = {
 
 type Registration = {
   _id: string;
+  studentId?: { name?: string; userId?: string };
   semesterLabel: string;
   academicYear: string;
   status: string;
@@ -40,6 +41,11 @@ type Registration = {
     totalAmount: number;
   };
   courseOfferingIds: Offering[];
+  paymentCompletedAt?: string;
+  paymentProvider?: "Stripe";
+  paymentAmount?: number;
+  paymentCurrency?: "BDT";
+  paymentReference?: string;
   rejectionReason?: string;
   advisorId?: { name: string };
   headId?: { name: string };
@@ -58,6 +64,145 @@ const STATUS_STEPS = [
 function getStepIndex(status: string) {
   const order = ["pending_advisor", "pending_head", "payment_pending", "admitted"];
   return order.indexOf(status);
+}
+
+function formatBdt(amount: number | undefined) {
+  return `BDT ${Number(amount ?? 0).toLocaleString()}`;
+}
+
+function formatDate(value: string | undefined) {
+  if (!value) return "N/A";
+  return new Intl.DateTimeFormat("en-BD", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function getCourseRows(registration: Registration) {
+  const rows = new Map<string, { code: string; title: string; credits: number; teachers: string[] }>();
+
+  for (const offering of registration.courseOfferingIds ?? []) {
+    const course = offering.courseId;
+    if (!course?._id && !course?.code) continue;
+    const key = course._id ?? course.code;
+
+    if (!rows.has(key)) {
+      rows.set(key, {
+        code: course.code,
+        title: course.title,
+        credits: course.credits,
+        teachers: [],
+      });
+    }
+
+    const teacher = offering.teacherId?.name;
+    if (teacher && !rows.get(key)!.teachers.includes(teacher)) {
+      rows.get(key)!.teachers.push(teacher);
+    }
+  }
+
+  return Array.from(rows.values());
+}
+
+function getPaymentSummary(registration: Registration) {
+  const courses = getCourseRows(registration);
+  const totalCredits =
+    registration.billing?.totalCredits ??
+    courses.reduce((sum, course) => sum + (course.credits ?? 0), 0);
+  const takaPerCredit =
+    registration.billing?.takaPerCredit ??
+    (totalCredits > 0 && registration.paymentAmount
+      ? Math.round(registration.paymentAmount / totalCredits)
+      : 2200);
+  const tuitionAmount =
+    registration.billing?.tuitionAmount ??
+    registration.paymentAmount ??
+    Math.round(totalCredits * takaPerCredit);
+  const totalAmount = registration.paymentAmount ?? registration.billing?.totalAmount ?? tuitionAmount;
+
+  return {
+    courses,
+    totalCredits,
+    takaPerCredit,
+    tuitionAmount,
+    totalAmount,
+  };
+}
+
+async function downloadPayslip(registration: Registration) {
+  const { PDFDocument, StandardFonts, rgb } = await import("pdf-lib");
+  const summary = getPaymentSummary(registration);
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([595, 842]);
+  const regular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const textColor = rgb(0.15, 0.19, 0.28);
+  const mutedColor = rgb(0.42, 0.48, 0.58);
+  const accentColor = rgb(0.31, 0.27, 0.9);
+
+  function truncate(value: string, max = 72) {
+    return value.length > max ? `${value.slice(0, max - 3)}...` : value;
+  }
+
+  function drawText(text: string, x: number, y: number, size = 10, font = regular, color = textColor) {
+    page.drawText(text, { x, y, size, font, color });
+  }
+
+  page.drawRectangle({ x: 0, y: 770, width: 595, height: 72, color: rgb(0.94, 0.95, 1) });
+  drawText("AcademiaOne", 40, 808, 22, bold, accentColor);
+  drawText("Payment Payslip", 40, 785, 13, regular, mutedColor);
+  drawText("PAID", 500, 806, 14, bold, rgb(0.05, 0.55, 0.32));
+
+  const student = registration.studentId;
+  const receiptNo = registration.paymentReference ?? registration._id;
+  const paidAt = registration.paymentCompletedAt ?? new Date().toISOString();
+
+  drawText("Student", 40, 730, 10, bold, mutedColor);
+  drawText(`${student?.name ?? "Student"} (${student?.userId ?? "N/A"})`, 40, 712, 12, regular);
+  drawText("Semester", 330, 730, 10, bold, mutedColor);
+  drawText(`${registration.semesterLabel} / ${registration.academicYear}`, 330, 712, 12, regular);
+
+  drawText("Receipt Reference", 40, 675, 10, bold, mutedColor);
+  drawText(truncate(receiptNo, 58), 40, 657, 11, regular);
+  drawText("Paid On", 330, 675, 10, bold, mutedColor);
+  drawText(formatDate(paidAt), 330, 657, 11, regular);
+
+  page.drawLine({ start: { x: 40, y: 625 }, end: { x: 555, y: 625 }, thickness: 1, color: rgb(0.85, 0.88, 0.92) });
+  drawText("Course", 40, 604, 10, bold, mutedColor);
+  drawText("Credits", 415, 604, 10, bold, mutedColor);
+  drawText("Teacher", 470, 604, 10, bold, mutedColor);
+
+  let y = 578;
+  summary.courses.forEach((course) => {
+    drawText(`${course.code} - ${truncate(course.title, 48)}`, 40, y, 10, regular);
+    drawText(String(course.credits), 425, y, 10, regular);
+    drawText(truncate(course.teachers.join(", ") || "TBA", 18), 470, y, 10, regular);
+    y -= 22;
+  });
+
+  y = Math.min(y - 16, 410);
+  page.drawRectangle({ x: 315, y: y - 100, width: 240, height: 118, color: rgb(0.97, 0.98, 1), borderColor: rgb(0.86, 0.88, 0.94), borderWidth: 1 });
+  drawText("Rate per credit", 335, y - 10, 10, regular, mutedColor);
+  drawText(formatBdt(summary.takaPerCredit), 465, y - 10, 10, regular);
+  drawText(`Tuition (${summary.totalCredits} credits)`, 335, y - 35, 10, regular, mutedColor);
+  drawText(formatBdt(summary.tuitionAmount), 465, y - 35, 10, regular);
+  drawText("Total Paid", 335, y - 72, 13, bold);
+  drawText(formatBdt(summary.totalAmount), 455, y - 72, 13, bold, accentColor);
+
+  drawText("This payslip was generated after Stripe payment verification.", 40, 80, 9, regular, mutedColor);
+  drawText("AcademiaOne Student Registration", 40, 62, 9, regular, mutedColor);
+
+  const pdfBytes = await pdfDoc.save();
+  const blob = new Blob([pdfBytes as BlobPart], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const safeRef = String(registration.paymentReference ?? registration._id).replace(/[^a-z0-9-]+/gi, "-");
+  link.href = url;
+  link.download = `payslip-${registration.semesterLabel}-${registration.academicYear}-${safeRef}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 export default function RegistrationPage() {
@@ -84,6 +229,7 @@ function RegistrationContent() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loadingOfferings, setLoadingOfferings] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [paymentCompleteRegistration, setPaymentCompleteRegistration] = useState<Registration | null>(null);
   const fetchAll = useCallback(async () => {
     const [regRes, winRes, resultRes] = await Promise.all([
       fetch("/api/registrations"),
@@ -93,10 +239,12 @@ function RegistrationContent() {
     const [regData, winData, resultData] = await Promise.all([
       regRes.json(), winRes.json(), resultRes.json(),
     ]);
-    setRegistrations(regData.data ?? []);
+    const nextRegistrations = (regData.data ?? []) as Registration[];
+    setRegistrations(nextRegistrations);
     setOpenWindows(winData.data ?? []);
     setCompletedSemesters((resultData.data ?? []).map((r: { semesterLabel: string }) => r.semesterLabel));
     setLoading(false);
+    return nextRegistrations;
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
@@ -104,13 +252,35 @@ function RegistrationContent() {
   useEffect(() => {
     const payment = searchParams.get("payment");
     if (payment !== "success") return;
-    toast("Payment successful! You are now admitted. 🎉", "success");
-    fetchAll();
-    const next = new URLSearchParams(searchParams.toString());
-    next.delete("payment");
-    const query = next.toString();
-    router.replace(query ? `/student/registration?${query}` : "/student/registration");
-  }, [fetchAll, router, searchParams, toast]);
+
+    let cancelled = false;
+
+    async function showPaymentComplete() {
+      const updatedRegistrations = await fetchAll();
+      if (cancelled) return;
+
+      const registrationId = searchParams.get("registrationId");
+      const completedRegistration =
+        updatedRegistrations.find((registration) => registration._id === registrationId) ??
+        updatedRegistrations.find((registration) => registration.status === "admitted") ??
+        null;
+
+      if (completedRegistration) {
+        setPaymentCompleteRegistration(completedRegistration);
+      }
+
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete("payment");
+      next.delete("registrationId");
+      const query = next.toString();
+      router.replace(query ? `/student/registration?${query}` : "/student/registration");
+    }
+
+    showPaymentComplete();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchAll, router, searchParams]);
 
   const selectedWindow = openWindows.find((w) => w._id === selectedWindowId) ?? null;
   const semester = selectedWindow?.semesterLabel ?? "";
@@ -205,6 +375,7 @@ function RegistrationContent() {
   if (loading) return <div className="flex justify-center py-24"><Spinner /></div>;
 
   const activeRegistrations = registrations.filter((r) => r.status !== "rejected");
+  const paymentCompleteSummary = paymentCompleteRegistration ? getPaymentSummary(paymentCompleteRegistration) : null;
 
   return (
     <div className="max-w-3xl mx-auto space-y-5">
@@ -350,8 +521,19 @@ function RegistrationContent() {
               </div>
             )}
             {registration.status === "admitted" && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-700 font-medium">
-                🎉 Admitted! You are enrolled in Semester {registration.semesterLabel} ({registration.academicYear}).
+              <div className="flex items-center justify-between gap-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                <span className="text-sm text-emerald-700 font-medium">
+                  Admitted. You are enrolled in Semester {registration.semesterLabel} ({registration.academicYear}).
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { void downloadPayslip(registration); }}
+                  className="shrink-0"
+                >
+                  <DownloadSimple size={14} />
+                  Payslip
+                </Button>
               </div>
             )}
           </Card>
@@ -480,6 +662,81 @@ function RegistrationContent() {
             <Button onClick={handleSubmit} isLoading={submitting} disabled={!semester || selectedIds.size === 0}>Submit Registration</Button>
           </div>
         </Card>
+      )}
+
+      {paymentCompleteRegistration && paymentCompleteSummary && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+          <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                  <Receipt size={24} weight="duotone" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800">Payment Complete</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Semester {paymentCompleteRegistration.semesterLabel} ({paymentCompleteRegistration.academicYear})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPaymentCompleteRegistration(null)}
+                className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Close payment complete window"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-5 px-6 py-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">Total Paid</p>
+                  <p className="mt-2 text-2xl font-bold text-emerald-600">{formatBdt(paymentCompleteSummary.totalAmount)}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">Reference</p>
+                  <p className="mt-2 break-all font-mono text-xs font-semibold text-slate-700">
+                    {paymentCompleteRegistration.paymentReference ?? paymentCompleteRegistration._id}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200">
+                <div className="grid grid-cols-[1fr_80px] border-b border-slate-100 px-4 py-2 text-xs font-semibold uppercase text-slate-400">
+                  <span>Course</span>
+                  <span className="text-right">Credits</span>
+                </div>
+                <div className="max-h-52 overflow-auto">
+                  {paymentCompleteSummary.courses.map((course) => (
+                    <div key={course.code} className="grid grid-cols-[1fr_80px] gap-3 border-b border-slate-50 px-4 py-3 last:border-b-0">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-700">{course.code}</p>
+                        <p className="text-xs text-slate-500">{course.title}</p>
+                      </div>
+                      <p className="text-right text-sm font-medium text-slate-600">{course.credits}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-indigo-50 px-4 py-3 text-sm text-indigo-700">
+                Admission is complete and your enrollment has been confirmed.
+              </div>
+
+              <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-4">
+                <Button variant="outline" onClick={() => setPaymentCompleteRegistration(null)}>
+                  Done
+                </Button>
+                <Button onClick={() => { void downloadPayslip(paymentCompleteRegistration); }}>
+                  <DownloadSimple size={16} />
+                  Download Payslip
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

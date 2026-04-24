@@ -104,7 +104,7 @@ export default function RegistrationPaymentPage() {
         }
 
         if (!cancelled) {
-          router.replace("/student/registration?payment=success");
+          router.replace(`/student/registration?payment=success&registrationId=${encodeURIComponent(params.id)}`);
         }
       } catch (error) {
         if (!cancelled) {

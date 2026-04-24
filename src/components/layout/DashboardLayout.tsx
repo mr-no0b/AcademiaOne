@@ -1,12 +1,13 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import Sidebar from "@/components/layout/Sidebar";
 import Header from "@/components/layout/Header";
 import { ToastProvider } from "@/components/ui/Toast";
+import { ProfilePasswordModal } from "@/components/layout/ProfilePasswordModal";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -23,6 +24,7 @@ export function DashboardLayout({
 }: DashboardLayoutProps) {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -54,6 +56,7 @@ export function DashboardLayout({
           userName={session.user.name ?? "User"}
           userId={session.user.userId}
           userImage={session.user.profileImage}
+          onProfileClick={() => setProfileOpen(true)}
         />
         <main className="flex-1 flex flex-col overflow-hidden">
           <Header
@@ -64,6 +67,13 @@ export function DashboardLayout({
             {children}
           </div>
         </main>
+        <ProfilePasswordModal
+          isOpen={profileOpen}
+          onClose={() => setProfileOpen(false)}
+          userName={session.user.name ?? "User"}
+          userId={session.user.userId}
+          userImage={session.user.profileImage}
+        />
       </div>
     </ToastProvider>
   );

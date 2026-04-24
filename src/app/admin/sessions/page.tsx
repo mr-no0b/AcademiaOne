@@ -11,12 +11,20 @@ import { CalendarBlank, Plus } from "@phosphor-icons/react";
 
 type Session = { _id: string; year: string; isActive: boolean; createdAt: string };
 
+const currentYear = new Date().getFullYear();
+const yearOptions = Array.from({ length: 21 }, (_, index) => currentYear - 5 + index);
+
+function formatSessionYear(startYear: number, endYear: number) {
+  return `${startYear}-${String(endYear).slice(-2)}`;
+}
+
 export default function AdminSessionsPage() {
   const { toast: addToast } = useToast();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [year, setYear] = useState("");
+  const [startYear, setStartYear] = useState(currentYear);
+  const [endYear, setEndYear] = useState(currentYear + 1);
   const [submitting, setSubmitting] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
 
@@ -30,7 +38,12 @@ export default function AdminSessionsPage() {
   useEffect(() => { fetchSessions(); }, []);
 
   async function handleCreate() {
-    if (!year.trim()) { addToast("Enter a session year e.g. 2025-26", "error"); return; }
+    if (endYear !== startYear + 1) {
+      addToast("Select consecutive years, e.g. 2025 and 2026.", "error");
+      return;
+    }
+
+    const year = formatSessionYear(startYear, endYear);
     setSubmitting(true);
     const res = await fetch("/api/sessions", {
       method: "POST",
@@ -41,7 +54,8 @@ export default function AdminSessionsPage() {
     if (d.success) {
       addToast("Session created!", "success");
       setShowModal(false);
-      setYear("");
+      setStartYear(currentYear);
+      setEndYear(currentYear + 1);
       fetchSessions();
     } else addToast(d.error || "Failed", "error");
     setSubmitting(false);
@@ -72,7 +86,7 @@ export default function AdminSessionsPage() {
               Sessions (academic years) used across registration windows, result windows, and course assignments.
             </p>
           </div>
-          <Button size="sm" onClick={() => { setYear(""); setShowModal(true); }}>
+          <Button size="sm" onClick={() => { setStartYear(currentYear); setEndYear(currentYear + 1); setShowModal(true); }}>
             <Plus size={14} className="mr-1" /> New Session
           </Button>
         </div>
@@ -83,7 +97,7 @@ export default function AdminSessionsPage() {
           <EmptyState
             icon={<CalendarBlank size={36} />}
             title="No sessions yet"
-            description='Create your first session e.g. "2025-26"'
+            description='Create your first session by selecting a start and end year.'
           />
         ) : (
           <div className="space-y-2">
@@ -124,18 +138,41 @@ export default function AdminSessionsPage() {
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="New Academic Session" maxWidth="sm">
         <div className="space-y-4">
           <p className="text-slate-500 text-sm">
-            Enter the academic year in the format <span className="font-mono font-semibold">YYYY-YY</span>, e.g. <span className="font-mono">2025-26</span>.
+            Select two consecutive years. The session will be stored as <span className="font-mono font-semibold">{formatSessionYear(startYear, endYear)}</span>.
           </p>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Session Year *</label>
-            <input
-              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 font-mono"
-              value={year}
-              onChange={(e) => setYear(e.target.value)}
-              placeholder="2025-26"
-              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Start Year *</label>
+              <select
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                value={startYear}
+                onChange={(e) => {
+                  const nextStart = Number(e.target.value);
+                  setStartYear(nextStart);
+                  setEndYear(nextStart + 1);
+                }}
+              >
+                {yearOptions.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">End Year *</label>
+              <select
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                value={endYear}
+                onChange={(e) => setEndYear(Number(e.target.value))}
+              >
+                {yearOptions.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </div>
           </div>
+          {endYear !== startYear + 1 ? (
+            <p className="text-xs text-amber-600">End year should be exactly one year after the start year.</p>
+          ) : null}
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" size="sm" onClick={() => setShowModal(false)}>Cancel</Button>
             <Button size="sm" isLoading={submitting} onClick={handleCreate}>Create Session</Button>

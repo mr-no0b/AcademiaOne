@@ -49,3 +49,5 @@ info_booklet_3rd_ed_KUET_CSE.pdf
 # TypeScript / Next generated files
 *.tsbuildinfo
 next-env.d.ts
+
+.codex

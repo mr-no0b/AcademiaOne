@@ -3,6 +3,15 @@ import { auth } from "@/lib/auth";
 import connectDB from "@/lib/db";
 import { Session } from "@/models/Session";
 
+function isValidSessionYear(year: string) {
+  const match = year.match(/^(\d{4})-(\d{2})$/);
+  if (!match) return false;
+
+  const startYear = Number(match[1]);
+  const endYearSuffix = Number(match[2]);
+  return (startYear + 1) % 100 === endYearSuffix;
+}
+
 export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -24,17 +33,23 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { year } = body;
 
-  if (!year?.trim()) {
+  const trimmedYear = String(year ?? "").trim();
+
+  if (!trimmedYear) {
     return NextResponse.json({ error: "Session year is required (e.g. 2025-26)" }, { status: 400 });
   }
 
-  const existing = await Session.findOne({ year: year.trim() });
+  if (!isValidSessionYear(trimmedYear)) {
+    return NextResponse.json({ error: "Session year must use consecutive format like 2025-26" }, { status: 400 });
+  }
+
+  const existing = await Session.findOne({ year: trimmedYear });
   if (existing) {
     return NextResponse.json({ error: "This session already exists" }, { status: 409 });
   }
 
   const newSession = await Session.create({
-    year: year.trim(),
+    year: trimmedYear,
     isActive: true,
     createdBy: session.user.id,
   });

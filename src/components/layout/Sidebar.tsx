@@ -28,6 +28,7 @@ import {
   ClipboardText,
   CalendarBlank,
   IdentificationCard,
+  UserCircle,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 import { UserAvatar } from "@/components/ui/UserAvatar";
@@ -138,9 +139,10 @@ interface SidebarProps {
   userName: string;
   userId: string;
   userImage?: string;
+  onProfileClick: () => void;
 }
 
-export default function Sidebar({ role, userName, userId, userImage }: SidebarProps) {
+export default function Sidebar({ role, userName, userId, userImage, onProfileClick }: SidebarProps) {
   const pathname = usePathname();
 
   const navConfig =
@@ -199,18 +201,29 @@ export default function Sidebar({ role, userName, userId, userImage }: SidebarPr
 
       {/* Footer */}
       <div className="px-3 py-3 border-t border-slate-800">
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] transition-colors cursor-pointer group">
-          <UserAvatar
-            name={userName}
-            imageUrl={userImage}
-            size={36}
-            className="w-9 h-9 flex-shrink-0"
-            fallbackClassName="bg-indigo-700 text-white flex-shrink-0"
-          />
-          <div className="flex-1 min-w-0">
-            <p className="text-white text-sm font-semibold truncate">{userName}</p>
-            <p className="text-slate-500 text-xs">{userId}</p>
-          </div>
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] transition-colors group">
+          <button
+            type="button"
+            onClick={onProfileClick}
+            className="flex min-w-0 flex-1 items-center gap-3 text-left"
+            title="Open profile"
+          >
+            <UserAvatar
+              name={userName}
+              imageUrl={userImage}
+              size={36}
+              className="w-9 h-9 flex-shrink-0"
+              fallbackClassName="bg-indigo-700 text-white flex-shrink-0"
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-white text-sm font-semibold truncate">{userName}</p>
+              <p className="text-slate-500 text-xs truncate">{userId}</p>
+              <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-indigo-300">
+                <UserCircle size={12} />
+                Profile
+              </span>
+            </div>
+          </button>
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
             className="text-slate-500 hover:text-white transition-colors ml-auto"

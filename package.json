@@ -9,6 +9,9 @@
     "bootstrap:admin": "ts-node --compiler-options '{\"module\":\"commonjs\"}' --project tsconfig.json src/scripts/bootstrap-admin.ts",
     "bootstrap:admin:local": "MONGODB_TARGET=local ts-node --compiler-options '{\"module\":\"commonjs\"}' --project tsconfig.json src/scripts/bootstrap-admin.ts",
     "bootstrap:admin:global": "MONGODB_TARGET=global ts-node --compiler-options '{\"module\":\"commonjs\"}' --project tsconfig.json src/scripts/bootstrap-admin.ts",
+    "mock:data": "ts-node --compiler-options '{\"module\":\"commonjs\"}' --project tsconfig.json src/scripts/generate-mock-data.ts",
+    "mock:data:local": "MONGODB_TARGET=local ts-node --compiler-options '{\"module\":\"commonjs\"}' --project tsconfig.json src/scripts/generate-mock-data.ts",
+    "mock:data:atlas": "MONGODB_TARGET=atlas ts-node --compiler-options '{\"module\":\"commonjs\"}' --project tsconfig.json src/scripts/generate-mock-data.ts --allow-atlas",
     "reset:keep-admin": "ts-node --compiler-options '{\"module\":\"commonjs\"}' --project tsconfig.json src/scripts/reset-keep-admin.ts",
     "reset:keep-admin:local": "MONGODB_TARGET=local ts-node --compiler-options '{\"module\":\"commonjs\"}' --project tsconfig.json src/scripts/reset-keep-admin.ts",
     "reset:keep-admin:global": "MONGODB_TARGET=global ts-node --compiler-options '{\"module\":\"commonjs\"}' --project tsconfig.json src/scripts/reset-keep-admin.ts"

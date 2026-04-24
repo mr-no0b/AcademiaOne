@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -7,7 +8,7 @@ import { Badge, roleVariant } from "@/components/ui/Badge";
 import { Spinner, EmptyState } from "@/components/ui/Spinner";
 import { Modal } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
-import { Users, UploadSimple, DownloadSimple, Pencil, MagnifyingGlass, TrashSimple, Warning, CaretUp, CaretDown } from "@phosphor-icons/react";
+import { Users, UploadSimple, DownloadSimple, Pencil, MagnifyingGlass, TrashSimple, Warning, CaretUp, CaretDown, Key, Copy, Check, UserPlus } from "@phosphor-icons/react";
 import { SEMESTERS } from "@/types";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 
@@ -32,6 +33,17 @@ type PendingCredentialExport = {
   role: ImportRole;
   csv: string;
   count: number;
+};
+type ResetPasswordResult = {
+  temporaryPassword: string;
+  copied: boolean;
+};
+type SingleCredentialResult = {
+  name: string;
+  userId: string;
+  role: "student" | "teacher";
+  temporaryPassword: string;
+  copied: boolean;
 };
 
 // "" = not chosen yet (invalid for teachers/students), "none" = explicit no-dept (teachers only)
@@ -69,6 +81,8 @@ function downloadTextFile(filename: string, content: string, type = "text/plain;
 
 export default function AdminUsersPage() {
   const { toast: addToast } = useToast();
+  const { data: session } = useSession();
+  const currentUserId = session?.user?.id;
   const [users, setUsers] = useState<User[]>([]);
   const [depts, setDepts] = useState<Dept[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,6 +105,10 @@ export default function AdminUsersPage() {
   const [studentDepartmentId, setStudentDepartmentId] = useState("");
   const [studentAdvisorOrder, setStudentAdvisorOrder] = useState<AdvisorOption[]>([]);
   const [pendingCredentialExport, setPendingCredentialExport] = useState<PendingCredentialExport | null>(null);
+  const [passwordResetUser, setPasswordResetUser] = useState<User | null>(null);
+  const [resetPasswordResult, setResetPasswordResult] = useState<ResetPasswordResult | null>(null);
+  const [resettingPassword, setResettingPassword] = useState(false);
+  const [singleCredentialResult, setSingleCredentialResult] = useState<SingleCredentialResult | null>(null);
 
   const fetchUsers = useCallback(async () => {
     const params = new URLSearchParams();
@@ -134,6 +152,14 @@ export default function AdminUsersPage() {
     setShowModal(true);
   }
 
+  function openCreate() {
+    setEditing(null);
+    setForm({ ...defaultForm });
+    setFormError(null);
+    setSubmitting(false);
+    setShowModal(true);
+  }
+
   function openImport() {
     setImportRole("teacher");
     setImportFile(null);
@@ -156,6 +182,17 @@ export default function AdminUsersPage() {
       pendingCredentialExport.csv,
       "text/csv;charset=utf-8;"
     );
+  }
+
+  async function copySingleCredentialPassword() {
+    if (!singleCredentialResult) return;
+    try {
+      await navigator.clipboard.writeText(singleCredentialResult.temporaryPassword);
+      setSingleCredentialResult({ ...singleCredentialResult, copied: true });
+      addToast("Password copied.", "success");
+    } catch {
+      addToast("Could not copy password automatically.", "error");
+    }
   }
 
   function moveAdvisor(index: number, direction: "up" | "down") {
@@ -228,9 +265,14 @@ export default function AdminUsersPage() {
   }
 
   async function handleSave() {
+    const editingSelf = editing?._id === currentUserId;
     // Department is required for teachers — must explicitly choose dept or 'No specific department'
     if (form.role === "teacher" && form.departmentId === "") {
-      setFormError("Please select a department for this teacher, or choose \"No specific department\".");
+      setFormError(editing ? "Please select a department for this teacher, or choose \"No specific department\"." : "Please select a department for this teacher.");
+      return;
+    }
+    if (!editing && form.role === "teacher" && form.departmentId === "none") {
+      setFormError("Please select a department for this teacher.");
       return;
     }
     // Department and advisor are required for students
@@ -247,12 +289,22 @@ export default function AdminUsersPage() {
     const method = editing ? "PATCH" : "POST";
     // Map 'none' sentinel back to empty string (API treats empty string as no dept)
     const body = { ...form, departmentId: form.departmentId === "none" ? "" : form.departmentId };
-    if (!body.password) delete (body as Partial<typeof body>).password;
+    if (!body.password || editingSelf) delete (body as Partial<typeof body>).password;
+    if (editingSelf) delete (body as Partial<typeof body>).isActive;
     const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const d = await res.json();
     if (d.success) {
       addToast(editing ? "User updated!" : "User created!", "success");
       setShowModal(false);
+      if (!editing && d.temporaryPassword && d.data?.userId) {
+        setSingleCredentialResult({
+          name: d.data.name ?? form.name,
+          userId: d.data.userId,
+          role: d.data.role,
+          temporaryPassword: d.temporaryPassword,
+          copied: false,
+        });
+      }
       fetchUsers();
     } else {
       setFormError(d.error || "Something went wrong. Please try again.");
@@ -261,6 +313,11 @@ export default function AdminUsersPage() {
   }
 
   async function toggleActive(u: User) {
+    if (u._id === currentUserId) {
+      addToast("Use your profile for your own account. You cannot deactivate yourself.", "warning");
+      return;
+    }
+
     const res = await fetch(`/api/users/${u._id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -286,6 +343,57 @@ export default function AdminUsersPage() {
     setDeleting(false);
   }
 
+  function openPasswordReset(u: User) {
+    if (u._id === currentUserId) {
+      addToast("Use your profile to change your own password.", "warning");
+      return;
+    }
+
+    setPasswordResetUser(u);
+    setResetPasswordResult(null);
+    setResettingPassword(false);
+  }
+
+  function closePasswordReset() {
+    setPasswordResetUser(null);
+    setResetPasswordResult(null);
+    setResettingPassword(false);
+  }
+
+  async function handleResetPassword() {
+    if (!passwordResetUser) return;
+    setResettingPassword(true);
+    const res = await fetch(`/api/users/${passwordResetUser._id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "reset_password" }),
+    });
+    const d = await res.json();
+    if (d.success && d.temporaryPassword) {
+      setResetPasswordResult({
+        temporaryPassword: d.temporaryPassword,
+        copied: false,
+      });
+      addToast("Password reset. Copy it before closing.", "success");
+    } else {
+      addToast(d.error || "Failed to reset password.", "error");
+    }
+    setResettingPassword(false);
+  }
+
+  async function copyResetPassword() {
+    if (!resetPasswordResult) return;
+    try {
+      await navigator.clipboard.writeText(resetPasswordResult.temporaryPassword);
+      setResetPasswordResult({ ...resetPasswordResult, copied: true });
+      addToast("Password copied.", "success");
+    } catch {
+      addToast("Could not copy password automatically.", "error");
+    }
+  }
+
+  const editingSelf = editing?._id === currentUserId;
+
   return (
     <DashboardLayout role="admin" title="User Management" breadcrumb="Home / Users">
       <div className="max-w-5xl mx-auto space-y-4">
@@ -299,7 +407,16 @@ export default function AdminUsersPage() {
               <button key={r} onClick={() => setRoleFilter(r)} className={`px-3.5 py-2 rounded-xl text-sm font-medium capitalize transition ${roleFilter === r ? "bg-indigo-600 text-white" : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"}`}>{r}</button>
             ))}
           </div>
-          <Button onClick={openImport}><UploadSimple size={15} className="mr-1" />Import CSV</Button>
+          <div className="flex gap-2">
+            <Button onClick={openCreate}>
+              <UserPlus size={15} className="mr-1" />
+              Add User
+            </Button>
+            <Button variant="outline" onClick={openImport}>
+              <UploadSimple size={15} className="mr-1" />
+              Import CSV
+            </Button>
+          </div>
         </div>
 
         <Card>
@@ -319,7 +436,9 @@ export default function AdminUsersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((u) => (
+                  {users.map((u) => {
+                    const isCurrentUser = u._id === currentUserId;
+                    return (
                     <tr key={u._id} className="border-b border-slate-50 hover:bg-slate-50/50">
                       <td className="py-3 px-3">
                         <div className="flex items-center gap-2">
@@ -343,12 +462,35 @@ export default function AdminUsersPage() {
                       <td className="py-3 px-3">
                         <div className="flex justify-end gap-2">
                           <button onClick={() => openEdit(u)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition"><Pencil size={14} /></button>
-                          <button onClick={() => toggleActive(u)} className={`text-xs px-2 py-1 rounded-lg font-medium transition ${u.isActive ? "hover:bg-rose-50 hover:text-rose-600 text-slate-400" : "hover:bg-emerald-50 hover:text-emerald-600 text-slate-400"}`}>{u.isActive ? "Deactivate" : "Activate"}</button>
-                          <button onClick={() => setDeleteConfirm(u)} className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition"><TrashSimple size={14} /></button>
+                          <button
+                            onClick={() => toggleActive(u)}
+                            disabled={isCurrentUser}
+                            title={isCurrentUser ? "You cannot deactivate your own account" : undefined}
+                            className={`text-xs px-2 py-1 rounded-lg font-medium transition disabled:opacity-40 disabled:cursor-not-allowed ${u.isActive ? "hover:bg-rose-50 hover:text-rose-600 text-slate-400" : "hover:bg-emerald-50 hover:text-emerald-600 text-slate-400"}`}
+                          >
+                            {u.isActive ? "Deactivate" : "Activate"}
+                          </button>
+                          <button
+                            onClick={() => openPasswordReset(u)}
+                            disabled={isCurrentUser}
+                            title={isCurrentUser ? "Use your profile to change your own password" : undefined}
+                            className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg font-medium text-slate-400 hover:bg-amber-50 hover:text-amber-600 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <Key size={13} />Reset
+                          </button>
+                          <button
+                            onClick={() => setDeleteConfirm(u)}
+                            disabled={isCurrentUser}
+                            title={isCurrentUser ? "You cannot delete your own account" : undefined}
+                            className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <TrashSimple size={14} />
+                          </button>
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -356,7 +498,7 @@ export default function AdminUsersPage() {
         </Card>
       </div>
 
-      <Modal isOpen={showModal} onClose={() => { setShowModal(false); setFormError(null); }} title="Edit User" maxWidth="md">
+      <Modal isOpen={showModal} onClose={() => { setShowModal(false); setFormError(null); }} title={editing ? "Edit User" : "Add User"} maxWidth="md">
         <div className="space-y-4">
           {formError && (
             <div className="flex items-start gap-2 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl px-3 py-2.5">
@@ -369,16 +511,22 @@ export default function AdminUsersPage() {
               <label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label>
               <input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">User ID *</label>
-              <input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 font-mono" value={form.userId} onChange={(e) => setForm({ ...form, userId: e.target.value })} placeholder="ST-001" />
-            </div>
-            <div>
+            {editing && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">User ID *</label>
+                <input className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 font-mono" value={form.userId} onChange={(e) => setForm({ ...form, userId: e.target.value })} placeholder="ST-001" />
+              </div>
+            )}
+            <div className={editing ? "" : "col-span-2"}>
               <label className="block text-sm font-medium text-slate-700 mb-1">Role *</label>
-              <select className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as "student" | "teacher" | "admin" })}>
+              <select
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                value={form.role}
+                onChange={(e) => setForm({ ...form, role: e.target.value as "student" | "teacher" | "admin", departmentId: "", advisorId: "" })}
+              >
                 <option value="student">Student</option>
                 <option value="teacher">Teacher</option>
-                <option value="admin">Admin</option>
+                {editing && <option value="admin">Admin</option>}
               </select>
             </div>
             <div className="col-span-2">
@@ -405,10 +553,26 @@ export default function AdminUsersPage() {
               </div>
               <p className="text-xs text-slate-400 mt-1">Optional. Leave blank to use the default image icon.</p>
             </div>
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-1">{editing ? "New Password (leave blank to keep)" : "Password *"}</label>
-              <input type="password" className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-            </div>
+            {!editing ? (
+              <div className="col-span-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5">
+                <p className="text-sm font-semibold text-indigo-900">ID and password are generated automatically</p>
+                <p className="text-sm text-indigo-800 mt-1">
+                  After creation, copy the one-time password from the next window.
+                </p>
+              </div>
+            ) : editingSelf ? (
+              <div className="col-span-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                <p className="text-sm font-semibold text-amber-900">Own password changes belong in Profile</p>
+                <p className="text-sm text-amber-800 mt-1">
+                  Open your profile from the sidebar to change your password with your current password.
+                </p>
+              </div>
+            ) : (
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-slate-700 mb-1">New Password (leave blank to keep)</label>
+                <input type="password" className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 Department {(form.role === "teacher" || form.role === "student") && <span className="text-rose-400">*</span>}
@@ -421,15 +585,15 @@ export default function AdminUsersPage() {
                 onChange={(e) => setForm({ ...form, departmentId: e.target.value, advisorId: "" })}
               >
                 {form.role === "teacher"
-                  ? <option value="">— select —</option>
+                  ? <option value="">— select department —</option>
                   : form.role === "student"
                     ? <option value="">— select department —</option>
                     : <option value="">None</option>}
-                {form.role === "teacher" && <option value="none">No specific department</option>}
+                {editing && form.role === "teacher" && <option value="none">No specific department</option>}
                 {depts.map((d) => <option key={d._id} value={d._id}>{d.name} ({d.code})</option>)}
               </select>
               {form.role === "teacher" && form.departmentId === "" && (
-                <p className="text-xs text-amber-600 mt-1">A teacher must have a department assigned.</p>
+                <p className="text-xs text-amber-600 mt-1">Please select a department for this teacher.</p>
               )}
               {form.role === "student" && form.departmentId === "" && (
                 <p className="text-xs text-amber-600 mt-1">A student must belong to a department.</p>
@@ -470,14 +634,27 @@ export default function AdminUsersPage() {
               </div>
             )}
           </div>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" className="rounded" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
-            <span className="text-sm font-medium text-slate-700">Active Account</span>
-          </label>
+          {editing && (
+            <>
+              <label className={`flex items-center gap-2 ${editingSelf ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
+                <input
+                  type="checkbox"
+                  className="rounded"
+                  checked={form.isActive}
+                  disabled={editingSelf}
+                  onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+                />
+                <span className="text-sm font-medium text-slate-700">Active Account</span>
+              </label>
+              {editingSelf ? (
+                <p className="text-xs text-slate-400">You cannot deactivate your own admin account.</p>
+              ) : null}
+            </>
+          )}
         </div>
         <div className="flex justify-end gap-3 mt-5">
           <Button variant="ghost" onClick={() => setShowModal(false)}>Cancel</Button>
-          <Button isLoading={submitting} onClick={handleSave}>Update</Button>
+          <Button isLoading={submitting} onClick={handleSave}>{editing ? "Update" : "Create User"}</Button>
         </div>
       </Modal>
 
@@ -696,6 +873,133 @@ export default function AdminUsersPage() {
                 Download Credentials
               </Button>
             </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(singleCredentialResult)}
+        onClose={() => setSingleCredentialResult(null)}
+        title="New User Credentials"
+        maxWidth="md"
+      >
+        {singleCredentialResult ? (
+          <div className="space-y-5">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-semibold text-amber-900">Password visible one time</p>
+              <p className="text-sm text-amber-800 mt-1">
+                Copy this password before closing this window.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-semibold text-slate-800">{singleCredentialResult.name}</p>
+              <p className="text-xs text-slate-500 capitalize">{singleCredentialResult.role}</p>
+            </div>
+
+            <div className="grid gap-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Generated ID</label>
+                <input
+                  readOnly
+                  value={singleCredentialResult.userId}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-mono bg-white text-slate-800 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Generated Password</label>
+                <div className="flex gap-2">
+                  <input
+                    readOnly
+                    value={singleCredentialResult.temporaryPassword}
+                    className="flex-1 min-w-0 border border-slate-200 rounded-xl px-3 py-2 text-sm font-mono bg-white text-slate-800 focus:outline-none"
+                  />
+                  <Button variant="outline" onClick={copySingleCredentialPassword}>
+                    {singleCredentialResult.copied ? <Check size={15} /> : <Copy size={15} />}
+                    {singleCredentialResult.copied ? "Copied" : "Copy"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button variant="ghost" onClick={() => setSingleCredentialResult(null)}>Close</Button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(passwordResetUser)}
+        onClose={closePasswordReset}
+        title="Reset Password"
+        maxWidth="md"
+      >
+        {passwordResetUser ? (
+          <div className="space-y-5">
+            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <UserAvatar
+                name={passwordResetUser.name}
+                imageUrl={passwordResetUser.profileImage}
+                size={40}
+                className="w-10 h-10 flex-shrink-0"
+                fallbackClassName="w-10 h-10 flex-shrink-0"
+              />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-800 truncate">{passwordResetUser.name}</p>
+                <p className="text-xs text-slate-500 font-mono">{passwordResetUser.userId}</p>
+              </div>
+            </div>
+
+            {resetPasswordResult ? (
+              <>
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                  <p className="text-sm font-semibold text-amber-900">Password visible one time</p>
+                  <p className="text-sm text-amber-800 mt-1">
+                    Copy this password before closing this window.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">New Password</label>
+                  <div className="flex gap-2">
+                    <input
+                      readOnly
+                      value={resetPasswordResult.temporaryPassword}
+                      className="flex-1 min-w-0 border border-slate-200 rounded-xl px-3 py-2 text-sm font-mono bg-white text-slate-800 focus:outline-none"
+                    />
+                    <Button variant="outline" onClick={copyResetPassword}>
+                      {resetPasswordResult.copied ? <Check size={15} /> : <Copy size={15} />}
+                      {resetPasswordResult.copied ? "Copied" : "Copy"}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <Button variant="ghost" onClick={closePasswordReset}>Close</Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                  <Warning size={22} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-amber-900">Reset this user's password?</p>
+                    <p className="text-sm text-amber-800 mt-1">
+                      The current password will stop working immediately.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3">
+                  <Button variant="ghost" onClick={closePasswordReset}>Cancel</Button>
+                  <Button isLoading={resettingPassword} onClick={handleResetPassword}>
+                    <Key size={15} />
+                    Reset Password
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         ) : null}
       </Modal>
