@@ -25,6 +25,7 @@ export function DashboardLayout({
   const { data: session, status } = useSession();
   const router = useRouter();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -37,12 +38,12 @@ export function DashboardLayout({
   if (status === "loading" || !session) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--bg-body)" }}>
-        <div className="flex flex-col items-center gap-3">
-          <svg className="animate-spin h-8 w-8 text-indigo-600" viewBox="0 0 24 24" fill="none">
+        <div className="glass-panel flex flex-col items-center gap-3 rounded-lg px-8 py-7">
+          <svg className="h-8 w-8 animate-spin text-blue-600" viewBox="0 0 24 24" fill="none">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
           </svg>
-          <p className="text-slate-500 text-sm">Loading...</p>
+          <p className="text-sm font-medium text-slate-500">Loading workspace...</p>
         </div>
       </div>
     );
@@ -50,21 +51,26 @@ export function DashboardLayout({
 
   return (
     <ToastProvider>
-      <div className="flex h-screen overflow-hidden" style={{ backgroundColor: "var(--bg-body)" }}>
+      <div className="app-shell flex h-screen overflow-hidden">
         <Sidebar
           role={role}
           userName={session.user.name ?? "User"}
           userId={session.user.userId}
           userImage={session.user.profileImage}
           onProfileClick={() => setProfileOpen(true)}
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
         />
-        <main className="flex-1 flex flex-col overflow-hidden">
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <Header
             title={title}
             breadcrumb={breadcrumb ?? `Home / ${title}`}
+            onMenuClick={() => setSidebarOpen(true)}
           />
-          <div className="flex-1 overflow-y-auto p-6">
-            {children}
+          <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8">
+            <div className="mx-auto w-full max-w-[1480px]">
+              {children}
+            </div>
           </div>
         </main>
         <ProfilePasswordModal

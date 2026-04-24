@@ -502,7 +502,7 @@ export default function AdminUsersPage() {
         <div className="space-y-4">
           {formError && (
             <div className="flex items-start gap-2 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl px-3 py-2.5">
-              <span className="font-bold shrink-0">⚠</span>
+              <Warning size={16} weight="fill" className="mt-0.5 shrink-0" />
               <span>{formError}</span>
             </div>
           )}

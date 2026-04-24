@@ -3,7 +3,7 @@ import React from "react";
 export function Spinner({ size = 20 }: { size?: number }) {
   return (
     <svg
-      className="animate-spin text-indigo-600"
+      className="animate-spin text-blue-600"
       style={{ width: size, height: size }}
       viewBox="0 0 24 24"
       fill="none"
@@ -27,7 +27,7 @@ export function Spinner({ size = 20 }: { size?: number }) {
 
 export function PageLoader() {
   return (
-    <div className="flex items-center justify-center h-64">
+    <div className="flex h-64 items-center justify-center">
       <Spinner size={32} />
     </div>
   );
@@ -42,11 +42,11 @@ interface EmptyStateProps {
 
 export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      {icon && <div className="text-slate-300 mb-4 text-6xl">{icon}</div>}
-      <h3 className="text-slate-600 font-semibold text-lg mb-1">{title}</h3>
+    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-white/70 py-16 text-center">
+      {icon && <div className="mb-4 text-6xl text-slate-300">{icon}</div>}
+      <h3 className="mb-1 text-lg font-bold text-slate-700">{title}</h3>
       {description && (
-        <p className="text-slate-400 text-sm max-w-sm mb-4">{description}</p>
+        <p className="mb-4 max-w-sm text-sm text-slate-400">{description}</p>
       )}
       {action}
     </div>

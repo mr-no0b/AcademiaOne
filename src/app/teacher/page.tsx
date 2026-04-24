@@ -47,7 +47,7 @@ export default async function TeacherDashboard() {
     <DashboardLayout role="teacher" title="Dashboard" breadcrumb="Home">
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Welcome back, {session.user.name?.split(" ")[0]}! 👋</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Welcome back, {session.user.name?.split(" ")[0]}!</h1>
           <p className="text-slate-400 text-sm mt-1">Here&apos;s your teaching overview</p>
         </div>
 

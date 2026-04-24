@@ -29,6 +29,7 @@ import {
   CalendarBlank,
   IdentificationCard,
   UserCircle,
+  X,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/cn";
 import { UserAvatar } from "@/components/ui/UserAvatar";
@@ -140,9 +141,11 @@ interface SidebarProps {
   userId: string;
   userImage?: string;
   onProfileClick: () => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
-export default function Sidebar({ role, userName, userId, userImage, onProfileClick }: SidebarProps) {
+export default function Sidebar({ role, userName, userId, userImage, onProfileClick, isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname();
 
   const navConfig =
@@ -155,44 +158,63 @@ export default function Sidebar({ role, userName, userId, userImage, onProfileCl
     return pathname.startsWith(href);
   };
 
-  return (
+  const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
+
+  const sidebarContent = (
     <aside
-      style={{ width: "var(--sidebar-width)", backgroundColor: "var(--sidebar-bg)" }}
-      className="flex flex-col flex-shrink-0 h-screen sticky top-0"
+      style={{ width: "var(--sidebar-width)" }}
+      className={cn(
+        "relative flex h-screen flex-shrink-0 flex-col overflow-hidden border-r border-white/10 bg-[linear-gradient(155deg,var(--sidebar-bg)_0%,var(--sidebar-bg-2)_54%,var(--sidebar-bg-3)_100%)] text-white shadow-[20px_0_80px_-56px_rgba(15,23,42,0.9)]",
+        "lg:sticky lg:top-0"
+      )}
     >
       {/* Brand */}
       <div
-        className="flex items-center px-6 border-b border-slate-800"
-        style={{ height: "var(--header-height)" }}
+        className="flex items-center justify-between border-b border-white/10 px-5 pb-3 pt-6"
+        style={{ minHeight: "calc(var(--header-height) + 12px)" }}
       >
-        <Link href={`/${role}`} className="flex items-center gap-3 text-white no-underline">
-          <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0">
-            <GraduationCap size={22} color="white" weight="bold" />
+        <Link href={`/${role}`} className="flex min-w-0 items-center gap-3 text-white no-underline" onClick={onClose}>
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-white text-emerald-700 shadow-[0_12px_30px_-18px_rgba(255,255,255,0.8)]">
+            <GraduationCap size={22} weight="bold" />
           </div>
-          <span className="font-bold text-lg text-white">AcademiaOne</span>
+          <div className="min-w-0">
+            <span className="block truncate text-lg font-bold text-white">AcademiaOne</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-100/85">{roleLabel}</span>
+          </div>
         </Link>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg p-2 text-slate-300 transition hover:bg-white/10 hover:text-white lg:hidden"
+          aria-label="Close navigation"
+        >
+          <X size={18} />
+        </button>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3">
+      <nav className="flex-1 overflow-y-auto px-3 py-4">
         {navConfig.map((group) => (
-          <div key={group.cat} className="mb-4">
-            <p className="text-xs uppercase tracking-widest text-slate-600 font-semibold px-3 mb-2 mt-2">
+          <div key={group.cat} className="mb-5">
+            <p className="mb-2 mt-2 px-3 text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-50/75">
               {group.cat}
             </p>
             {group.items.map((item) => (
               <Link
                 key={item.id}
                 href={item.href}
+                onClick={onClose}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg mb-0.5 text-sm font-medium transition-all no-underline",
+                  "mb-1 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold no-underline transition-all",
                   isActive(item.href)
-                    ? "bg-indigo-600 text-white shadow-[0_4px_6px_-1px_rgba(79,70,229,0.4)]"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                    ? "bg-white text-slate-950 shadow-[0_16px_38px_-28px_rgba(255,255,255,0.75)]"
+                    : "text-white/82 hover:bg-white/10 hover:text-white"
                 )}
               >
-                {item.icon}
-                {item.label}
+                <span className={cn("transition-colors", isActive(item.href) ? "text-emerald-700" : "text-emerald-50/75")}>
+                  {item.icon}
+                </span>
+                <span className="truncate">{item.label}</span>
               </Link>
             ))}
           </div>
@@ -200,8 +222,8 @@ export default function Sidebar({ role, userName, userId, userImage, onProfileCl
       </nav>
 
       {/* Footer */}
-      <div className="px-3 py-3 border-t border-slate-800">
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] transition-colors group">
+      <div className="border-t border-white/10 px-3 py-3">
+        <div className="group flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.04] p-3 transition-colors hover:bg-white/[0.08]">
           <button
             type="button"
             onClick={onProfileClick}
@@ -213,12 +235,12 @@ export default function Sidebar({ role, userName, userId, userImage, onProfileCl
               imageUrl={userImage}
               size={36}
               className="w-9 h-9 flex-shrink-0"
-              fallbackClassName="bg-indigo-700 text-white flex-shrink-0"
+              fallbackClassName="bg-emerald-600 text-white flex-shrink-0"
             />
             <div className="flex-1 min-w-0">
               <p className="text-white text-sm font-semibold truncate">{userName}</p>
-              <p className="text-slate-500 text-xs truncate">{userId}</p>
-              <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-indigo-300">
+              <p className="truncate text-xs text-emerald-50/70">{userId}</p>
+              <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-50">
                 <UserCircle size={12} />
                 Profile
               </span>
@@ -226,7 +248,7 @@ export default function Sidebar({ role, userName, userId, userImage, onProfileCl
           </button>
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
-            className="text-slate-500 hover:text-white transition-colors ml-auto"
+            className="ml-auto rounded-lg p-2 text-slate-500 transition-colors hover:bg-white/10 hover:text-white"
             title="Sign out"
           >
             <SignOut size={18} />
@@ -234,5 +256,22 @@ export default function Sidebar({ role, userName, userId, userImage, onProfileCl
         </div>
       </div>
     </aside>
+  );
+
+  return (
+    <>
+      <div className="hidden lg:block">{sidebarContent}</div>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm"
+            aria-label="Close navigation backdrop"
+            onClick={onClose}
+          />
+          <div className="relative h-full animate-slide-in">{sidebarContent}</div>
+        </div>
+      )}
+    </>
   );
 }

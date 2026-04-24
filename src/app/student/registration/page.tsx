@@ -56,8 +56,8 @@ type OpenWindow = { _id: string; semesterLabel: string; academicYear: string; ta
 
 const STATUS_STEPS = [
   { key: "pending_advisor", label: "Submitted" },
-  { key: "pending_head", label: "Advisor ✓" },
-  { key: "payment_pending", label: "Head ✓" },
+  { key: "pending_head", label: "Advisor OK" },
+  { key: "payment_pending", label: "Head OK" },
   { key: "admitted", label: "Admitted" },
 ];
 
@@ -504,18 +504,18 @@ function RegistrationContent() {
 
             {registration.status === "pending_advisor" && (
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
-                ⏳ Waiting for your department advisor{registration.advisorId ? ` (${registration.advisorId.name})` : ""} to approve.
+                Waiting for your department advisor{registration.advisorId ? ` (${registration.advisorId.name})` : ""} to approve.
               </div>
             )}
             {registration.status === "pending_head" && (
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700">
-                ⏳ Advisor approved{registration.advisorId ? ` (${registration.advisorId.name})` : ""}. Waiting for department head.
+                Advisor approved{registration.advisorId ? ` (${registration.advisorId.name})` : ""}. Waiting for department head.
               </div>
             )}
             {registration.status === "payment_pending" && (
               <div className="flex items-center justify-between p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
                 <span className="text-sm text-indigo-700 font-medium">
-                  ✓ Both approvals received. Pay {registration.billing ? `BDT ${registration.billing.totalAmount.toLocaleString()}` : "now"} with Stripe to get admitted.
+                  Both approvals received. Pay {registration.billing ? `BDT ${registration.billing.totalAmount.toLocaleString()}` : "now"} with Stripe to get admitted.
                 </span>
                 <Button onClick={() => handlePay(registration._id)} size="sm">Pay with Stripe</Button>
               </div>
@@ -548,7 +548,7 @@ function RegistrationContent() {
             <Badge variant="danger">REJECTED</Badge>
           </div>
           <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
-            ✗ Registration rejected.{registration.rejectionReason && <span className="block mt-1 font-medium">Reason: {registration.rejectionReason}</span>}
+            Registration rejected.{registration.rejectionReason && <span className="block mt-1 font-medium">Reason: {registration.rejectionReason}</span>}
           </div>
         </Card>
       ))}

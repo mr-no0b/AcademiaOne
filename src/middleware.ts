@@ -9,9 +9,9 @@ export default auth((req) => {
   const session = req.auth;
 
   // Public routes
-  if (pathname === "/login" || pathname === "/" || pathname.startsWith("/api/auth")) {
+  if (pathname === "/login" || pathname === "/admin/login" || pathname === "/" || pathname.startsWith("/api/auth")) {
     // Redirect logged-in users away from login
-    if (session && pathname === "/login") {
+    if (session && (pathname === "/login" || pathname === "/admin/login")) {
       const role = session.user.role;
       return NextResponse.redirect(new URL(`/${role}`, req.url));
     }
@@ -20,6 +20,9 @@ export default auth((req) => {
 
   // Protected routes — must be logged in
   if (!session) {
+    if (pathname.startsWith("/admin")) {
+      return NextResponse.redirect(new URL("/admin/login", req.url));
+    }
     return NextResponse.redirect(new URL("/login", req.url));
   }
 

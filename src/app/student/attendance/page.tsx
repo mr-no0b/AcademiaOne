@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { useToast } from "@/components/ui/Toast";
-import { CheckCircle, Lightning, CaretDown, CaretUp } from "@phosphor-icons/react";
+import { CheckCircle, Lightning, CaretDown, CaretUp, WarningCircle } from "@phosphor-icons/react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -99,8 +99,9 @@ export default function StudentAttendancePage() {
       <div className="max-w-3xl mx-auto space-y-4">
 
         {/* Warning banner */}
-        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
-          ⚠ Minimum 65% attendance required to sit for final exams. Warning issued below 70%.
+        <div className="flex items-start gap-2 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700">
+          <WarningCircle size={18} weight="fill" className="mt-0.5 shrink-0" />
+          <span>Minimum 65% attendance required to sit for final exams. Warning issued below 70%.</span>
         </div>
 
         {/* ── Live Session Alert ──────────────────────────────────────── */}

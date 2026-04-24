@@ -32,15 +32,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <ToastContext.Provider value={{ toast }}>
       {children}
       <div
-        style={{
-          position: "fixed",
-          bottom: "2rem",
-          right: "2rem",
-          zIndex: 9999,
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.75rem",
-        }}
+        className="fixed right-4 top-4 z-[9999] flex w-[calc(100vw-2rem)] max-w-[420px] flex-col gap-3 sm:right-6 sm:top-6 sm:w-auto"
       >
         {toasts.map((t) => (
           <ToastItem
@@ -70,12 +62,10 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
   };
 
   return (
-    <div
-      className={`flex items-center gap-3 bg-white px-4 py-3 rounded-xl shadow-card-hover border border-border border-l-4 ${borders[toast.type]} min-w-[300px] max-w-[420px] animate-slide-in`}
-    >
+    <div className={`animate-slide-in flex min-w-0 items-center gap-3 rounded-lg border border-slate-200 border-l-4 bg-white/95 px-4 py-3 shadow-card-hover backdrop-blur ${borders[toast.type]} sm:min-w-[320px]`}>
       {icons[toast.type]}
       <span className="flex-1 text-sm font-medium text-slate-700">{toast.message}</span>
-      <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+      <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
         <X size={16} />
       </button>
     </div>

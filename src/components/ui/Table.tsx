@@ -20,19 +20,19 @@ export function Table<T extends { _id?: string; id?: string }>({
 }: TableProps<T>) {
   if (data.length === 0) {
     return (
-      <div className="text-center py-12 text-slate-400 text-sm">{emptyMessage}</div>
+      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/70 py-12 text-center text-sm font-medium text-slate-400">{emptyMessage}</div>
     );
   }
 
   return (
-    <div className="w-full overflow-x-auto">
+    <div className="w-full overflow-x-auto rounded-lg border border-slate-200 bg-white">
       <table className="w-full border-collapse">
         <thead>
           <tr>
             {columns.map((col) => (
               <th
                 key={col.key}
-                className="text-left px-4 py-3 text-xs uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-100 bg-slate-50"
+                className="border-b border-slate-200 bg-slate-50/90 px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-slate-500"
               >
                 {col.label}
               </th>
@@ -43,7 +43,7 @@ export function Table<T extends { _id?: string; id?: string }>({
           {data.map((row, i) => (
             <tr
               key={(row._id ?? row.id ?? i) as string}
-              className="hover:bg-slate-50/80 transition-colors border-b border-slate-50 last:border-0"
+              className="border-b border-slate-100 transition-colors last:border-0 hover:bg-blue-50/35"
             >
               {columns.map((col) => (
                 <td

@@ -1,7 +1,19 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { MagnifyingGlass, Bell, X, Trash, Check } from "@phosphor-icons/react";
+import {
+  Bell,
+  BellRinging,
+  Check,
+  ClipboardText,
+  Flag,
+  GraduationCap,
+  List,
+  Megaphone,
+  PushPin,
+  Trash,
+  X,
+} from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 
 interface Notification {
@@ -17,10 +29,10 @@ interface Notification {
 interface HeaderProps {
   title: string;
   breadcrumb?: string;
+  onMenuClick?: () => void;
 }
 
-export default function Header({ title, breadcrumb }: HeaderProps) {
-  const [searchVal, setSearchVal] = useState("");
+export default function Header({ title, breadcrumb, onMenuClick }: HeaderProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
@@ -74,84 +86,68 @@ export default function Header({ title, breadcrumb }: HeaderProps) {
     if (n.link) router.push(n.link);
   };
 
-  const typeIcon: Record<string, string> = {
-    registration: "📋",
-    notice: "📢",
-    announcement: "📌",
-    election: "🗳️",
-    result: "🎓",
-    general: "🔔",
-  };
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchVal.trim()) {
-      router.push(`/student/forum?q=${encodeURIComponent(searchVal)}`);
-    }
+  const typeIcon: Record<string, React.ReactNode> = {
+    registration: <ClipboardText size={16} />,
+    notice: <Megaphone size={16} />,
+    announcement: <PushPin size={16} />,
+    election: <Flag size={16} />,
+    result: <GraduationCap size={16} />,
+    general: <BellRinging size={16} />,
   };
 
   return (
     <header
-      className="flex items-center justify-between bg-white border-b border-slate-200 px-6 flex-shrink-0"
+      className="glass-panel flex flex-shrink-0 items-center justify-between border-x-0 border-t-0 px-4 sm:px-6"
       style={{ height: "var(--header-height)" }}
     >
       {/* Left */}
-      <div className="flex items-center gap-4">
-        <div>
-          <p className="text-sm font-semibold text-slate-800">{title}</p>
-          {breadcrumb && <p className="text-xs text-slate-400">{breadcrumb}</p>}
+      <div className="flex min-w-0 items-center gap-3">
+        <button
+          type="button"
+          onClick={onMenuClick}
+          className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-950 lg:hidden"
+          aria-label="Open navigation"
+        >
+          <List size={20} />
+        </button>
+        <div className="min-w-0">
+          <p className="truncate text-lg font-bold text-slate-950">{title}</p>
+          {breadcrumb && <p className="truncate text-xs font-medium text-slate-500">{breadcrumb}</p>}
         </div>
       </div>
 
       {/* Right */}
-      <div className="flex items-center gap-3">
-        {/* Search */}
-        <form onSubmit={handleSearch} className="relative hidden sm:flex items-center">
-          <MagnifyingGlass className="absolute left-3 text-slate-400" size={16} />
-          <input
-            type="text"
-            value={searchVal}
-            onChange={(e) => setSearchVal(e.target.value)}
-            placeholder="Search..."
-            className="pl-9 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl w-56 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
-          />
-          {searchVal && (
-            <button type="button" onClick={() => setSearchVal("")} className="absolute right-3 text-slate-400 hover:text-slate-600">
-              <X size={14} />
-            </button>
-          )}
-        </form>
-
+      <div className="flex items-center gap-2 sm:gap-3">
         {/* Notification Bell */}
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={handleBellClick}
-            className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
+            className="relative rounded-lg border border-slate-200 bg-white/85 p-2 text-slate-500 shadow-sm transition-colors hover:bg-white hover:text-slate-900"
           >
             <Bell size={20} />
             {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-white">
+              <span className="absolute -right-1 -top-1 flex h-[19px] min-w-[19px] items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[10px] font-bold text-white">
                 {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             )}
           </button>
 
           {open && (
-            <div className="absolute right-0 top-12 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden">
+            <div className="absolute right-0 top-12 z-50 w-[calc(100vw-2rem)] max-w-96 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-modal sm:w-96">
               {/* Header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-                <span className="font-semibold text-slate-700 text-sm">Notifications</span>
+              <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/85 px-4 py-3">
+                <span className="text-sm font-bold text-slate-800">Notifications</span>
                 <div className="flex items-center gap-2">
                   {notifications.length > 0 && (
                     <button
                       onClick={handleClearAll}
-                      className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 transition-colors px-2 py-1 rounded-lg hover:bg-red-50"
+                      className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-red-500 transition-colors hover:bg-red-50 hover:text-red-700"
                     >
                       <Trash size={13} />
                       Clear all
                     </button>
                   )}
-                  <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                  <button onClick={() => setOpen(false)} className="rounded-lg p-1 text-slate-400 hover:bg-white hover:text-slate-600">
                     <X size={15} />
                   </button>
                 </div>
@@ -162,24 +158,26 @@ export default function Header({ title, breadcrumb }: HeaderProps) {
                 {notifications.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-10 text-slate-400">
                     <Check size={32} className="mb-2 text-slate-300" />
-                    <p className="text-sm">All caught up!</p>
+                    <p className="text-sm font-medium">All caught up</p>
                   </div>
                 ) : (
                   notifications.map((n) => (
                     <button
                       key={n._id}
                       onClick={() => handleNotificationClick(n)}
-                      className={`w-full text-left px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors flex gap-3 ${!n.isRead ? "bg-indigo-50/60" : ""}`}
+                      className={`flex w-full gap-3 border-b border-slate-100 px-4 py-3 text-left transition-colors hover:bg-blue-50/45 ${!n.isRead ? "bg-blue-50/70" : ""}`}
                     >
-                      <span className="text-lg flex-shrink-0 mt-0.5">{typeIcon[n.type] ?? "🔔"}</span>
+                      <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+                        {typeIcon[n.type] ?? <BellRinging size={16} />}
+                      </span>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium text-slate-700 truncate ${!n.isRead ? "font-semibold" : ""}`}>{n.title}</p>
+                        <p className={`truncate text-sm font-semibold text-slate-800 ${!n.isRead ? "font-bold" : ""}`}>{n.title}</p>
                         <p className="text-xs text-slate-500 line-clamp-2 mt-0.5">{n.message}</p>
                         <p className="text-[10px] text-slate-400 mt-1">
                           {new Date(n.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                         </p>
                       </div>
-                      {!n.isRead && <span className="w-2 h-2 bg-indigo-500 rounded-full flex-shrink-0 mt-1.5" />}
+                      {!n.isRead && <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500" />}
                     </button>
                   ))
                 )}

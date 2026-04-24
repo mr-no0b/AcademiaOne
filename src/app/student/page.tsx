@@ -12,7 +12,7 @@ import { Notice } from "@/models/Notice";
 import { Registration } from "@/models/Registration";
 import { StatCard } from "@/components/ui/Card";
 import { Badge, statusVariant } from "@/components/ui/Badge";
-import { TrendUp, Users, BookOpen, Clock } from "@phosphor-icons/react/dist/ssr";
+import { TrendUp, Users, BookOpen, Clock, PushPin } from "@phosphor-icons/react/dist/ssr";
 import { formatDate, serializeDoc } from "@/lib/utils";
 import { Card } from "@/components/ui/Card";
 import Link from "next/link";
@@ -110,7 +110,7 @@ export default async function StudentDashboard() {
           value={`${data.avgAttendance}%`}
           icon={<Users size={22} />}
           valueColor={data.avgAttendance < 70 ? "text-red-500" : "text-slate-800"}
-          sub={data.avgAttendance < 70 ? "⚠ Below 70% threshold" : "Good standing"}
+          sub={data.avgAttendance < 70 ? "Below 70% threshold" : "Good standing"}
         />
         <StatCard
           label="Enrolled Courses"
@@ -202,7 +202,12 @@ export default async function StudentDashboard() {
                     <span className="text-xs text-slate-400">{formatDate(n.createdAt as string)}</span>
                   </div>
                   <p className="text-sm font-semibold text-slate-700">{n.title as string}</p>
-                  {Boolean(n.isPinned) && <span className="text-xs text-amber-600 font-medium">📌 Pinned</span>}
+                  {Boolean(n.isPinned) && (
+                    <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-amber-600">
+                      <PushPin size={12} weight="fill" />
+                      Pinned
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
